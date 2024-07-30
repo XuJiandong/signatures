@@ -8,7 +8,8 @@ members = [
     "lms",
     "ml-dsa",
     "rfc6979",
-    "slh-dsa"
+    "slh-dsa",
+    "ecdsa/fuzz"
 ]
 
 [profile.dev]
