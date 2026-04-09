@@ -1,3 +1,26 @@
+# Optimized ML-DSA for ckb-vm
+
+This is an optimized version of [ML-DSA](https://github.com/RustCrypto/signatures/tree/master/ml-dsa) for ckb-vm.
+The main changes include:
+1. Use an optimized [SHAKE128 implementation](https://github.com/nervosnetwork/ckb-vm-contrib/tree/main/opt-lib/fips202)
+2. Optimize the matrix-filling strategy
+
+The changes are small and easy to review. Benchmark results:
+
+| Variant   | Before  | After   |
+|-----------|---------|---------|
+| ml-dsa-44 | 4.6M    | 3.2M    |
+| ml-dsa-65 | 7.4M    | 4.8M    |
+| ml-dsa-87 | 12.3M   | 7.5M    |
+
+Approximately 60–70% of the original cycle count.
+
+---
+
+Note: The original README content follows.
+
+---
+
 # [RustCrypto]: ML-DSA
 
 [![crate][crate-image]][crate-link]

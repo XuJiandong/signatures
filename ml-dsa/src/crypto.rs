@@ -1,9 +1,73 @@
 use hybrid_array::Array;
 use module_lattice::ArraySize;
 use sha3::{
-    Shake128, Shake256,
+    Shake256,
     digest::{ExtendableOutput, XofReader},
 };
+
+// G uses ckb-opt-fips202's optimized Shake128 implementation.
+pub(crate) enum G {
+    Absorbing(ckb_opt_fips202::Shake128),
+    Squeezing(ckb_opt_fips202::Shake128),
+}
+
+impl Default for G {
+    fn default() -> Self {
+        Self::Absorbing(ckb_opt_fips202::Shake128::default())
+    }
+}
+
+impl G {
+    pub(crate) fn absorb(mut self, input: &[u8]) -> Self {
+        match &mut self {
+            Self::Absorbing(sponge) => sponge.absorb(input),
+            Self::Squeezing(_) => unreachable!(),
+        }
+
+        self
+    }
+
+    pub(crate) fn squeeze_blocks(&mut self, output: &mut [u8]) -> &mut Self {
+        match self {
+            Self::Absorbing(sponge) => {
+                // Clone required to satisfy borrow checker
+                let mut finalized = sponge.clone();
+                finalized.finalize();
+                // `squeeze_blocks` efficiently outputs data in blocks when the buffer length
+                // is a multiple of SHAKE128's rate (168 bytes). Panics if the length is not a multiple of the rate.
+                finalized.squeeze_blocks(output);
+                *self = Self::Squeezing(finalized);
+            }
+            Self::Squeezing(sponge) => {
+                sponge.squeeze_blocks(output);
+            }
+        }
+
+        self
+    }
+    pub(crate) fn squeeze(&mut self, output: &mut [u8]) -> &mut Self {
+        match self {
+            Self::Absorbing(sponge) => {
+                // Clone required to satisfy borrow checker
+                let mut finalized = sponge.clone();
+                finalized.finalize();
+                finalized.squeeze(output);
+                *self = Self::Squeezing(finalized);
+            }
+            Self::Squeezing(sponge) => {
+                sponge.squeeze(output);
+            }
+        }
+
+        self
+    }
+    #[allow(dead_code)]
+    pub(crate) fn squeeze_new<N: ArraySize>(&mut self) -> Array<u8, N> {
+        let mut v = Array::default();
+        self.squeeze(&mut v);
+        v
+    }
+}
 
 pub(crate) enum ShakeState<Shake: ExtendableOutput> {
     Absorbing(Shake),
@@ -48,7 +112,9 @@ impl<Shake: ExtendableOutput + Default + Clone> ShakeState<Shake> {
 
         self
     }
-
+    pub(crate) fn squeeze_blocks(&mut self, output: &mut [u8]) -> &mut Self {
+        self.squeeze(output)
+    }
     pub(crate) fn squeeze_new<N: ArraySize>(&mut self) -> Array<u8, N> {
         let mut v = Array::default();
         self.squeeze(&mut v);
@@ -56,7 +122,6 @@ impl<Shake: ExtendableOutput + Default + Clone> ShakeState<Shake> {
     }
 }
 
-pub(crate) type G = ShakeState<Shake128>;
 pub(crate) type H = ShakeState<Shake256>;
 
 #[cfg(test)]
